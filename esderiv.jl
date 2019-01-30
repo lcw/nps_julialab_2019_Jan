@@ -76,21 +76,31 @@ function flux!(F, UM, VM, WM, ρM, EM, zM, UP, VP, WP, ρP, EP, zP, gravity)
   F[_E, 3] = (F[_U, 3] * ua + F[_V, 3] * va + F[_W, 3] * wa) + Efac * F[_ρ, 3]
 end
 
+function flux(q, z, gravity)
+  F = similar(q, size(q, 1), size(q, 1), size(q, 2), 3)
+  G = similar(q, size(q, 2), 3)
+  for n = 1:size(q,1)
+    for m = 1:size(q,1)
+      flux!(G, q[n, _U], q[n, _V], q[n, _W], q[n, _ρ], q[n, _E], z[n],
+            q[m, _U], q[m, _V], q[m, _W], q[m, _ρ], q[m, _E], z[m], gravity)
+      F[n, m, :, :] = G[:, :]
+    end
+  end
+  F
+end
+
+
 
 # {{{ Volume RHS for 3-D
 function volumerhs!(::Val{3}, ::Val{N}, rhs::Array, Q, vgeo, gravity, D,
-                    elems) where {N, nmoist, ntrace}
+                    elems) where {N}
   nvar = _nstate
 
   DFloat = eltype(Q)
 
   Nq = N + 1
 
-  nelem = size(Q)[end]
-
-  Q = reshape(Q, Nq, Nq, Nq, nvar, nelem)
-  rhs = reshape(rhs, Nq, Nq, Nq, nvar, nelem)
-  vgeo = reshape(vgeo, Nq, Nq, Nq, _nvgeo, nelem)
+  nelem = last(size(Q))
 
   F       = Array{DFloat}(undef, _nstate, 3)
   l_MJrhs = Array{DFloat}(undef, _nstate)
@@ -221,9 +231,52 @@ function volumerhs!(::Val{3}, ::Val{N}, rhs::Array, Q, vgeo, gravity, D,
       end
 
       # FIXME: buoyancy term
-      rhs[i, j, _W, e] -= ρijk * gravity
+      rhs[i, j, k,  _W, e] -= ρijk * gravity
     end
   end
+end
+# }}}
+
+# {{{ Volume RHS for 3-D
+function volumerhs_v2!(::Val{3}, ::Val{N}, rhs::Array, Q, vgeo, gravity, D,
+                    elems) where {N}
+  nvar = _nstate
+
+  DFloat = eltype(Q)
+
+  Np = (N+1)^3
+
+  Q = reshape(Q, Np, _nstate, last(size(Q)))
+  vgeo = reshape(vgeo, Np, _nvgeo, last(size(vgeo)))
+  rhs = reshape(rhs, Np, _nstate, last(size(rhs)))
+
+  eye = Array{DFloat}(I, N+1, N+1)
+  Drst = (kron(eye, eye, D), kron(eye, D, eye), kron(D, eye, eye))
+
+  @inbounds for e in elems
+
+    F = flux(Q[:, :, e], vgeo[:, _z, e], gravity)
+
+    G = ((vgeo[:, _ξx, e] .* vgeo[:, _MJ, e],
+          vgeo[:, _ξy, e] .* vgeo[:, _MJ, e],
+          vgeo[:, _ξz, e] .* vgeo[:, _MJ, e]),
+         (vgeo[:, _ηx, e] .* vgeo[:, _MJ, e],
+          vgeo[:, _ηy, e] .* vgeo[:, _MJ, e],
+          vgeo[:, _ηz, e] .* vgeo[:, _MJ, e]),
+         (vgeo[:, _ζx, e] .* vgeo[:, _MJ, e],
+          vgeo[:, _ζy, e] .* vgeo[:, _MJ, e],
+          vgeo[:, _ζz, e] .* vgeo[:, _MJ, e]))
+    MJI = vgeo[:, _MJI, e]
+
+    for s = 1:nvar, ξind = 1:3, xind = 1:3
+      rhs[:, s, e] -=
+      MJI .* (G[ξind][xind] .* ((Drst[ξind] .* F[:, :, s, xind]) * ones(Np)) -
+              (F[:, :, s, xind] .* Drst[ξind]') * G[ξind][xind])
+    end
+
+    rhs[:, _W, e] -= Q[:, _ρ, e] * gravity
+  end
+
 end
 # }}}
 
@@ -233,11 +286,18 @@ function main(nelem, N, DFloat)
 
   Nq = N + 1
   Q = 1 .+ rand(rnd, DFloat, Nq, Nq, Nq, nvar, nelem)
-  Q[:, :, :, _E, :] .+= 10
-  rhs = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-  vgeo = zeros(DFloat, Nq, Nq, Nq, _nvgeo, nelem)
+  Q[:, :, :, _E, :] .+= 100
+  vgeo = rand(rnd, DFloat, Nq, Nq, Nq, _nvgeo, nelem)
   D = rand(rnd, DFloat, Nq, Nq)
 
-  volumerhs!(Val(3), Val(N), rhs, Q, vgeo, DFloat(grav), D, 1:nelem)
-  @show norm(rhs)
+  rhs_v1 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+  volumerhs!(Val(3), Val(N), rhs_v1, Q, vgeo, DFloat(grav), D, 1:nelem)
+  @show norm_v1 = norm(rhs_v1)
+
+  rhs_v2 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+  volumerhs_v2!(Val(3), Val(N), rhs_v2, Q, vgeo, DFloat(grav), D, 1:nelem)
+  @show norm_v2 = norm(rhs_v2)
+  @show norm_v1 - norm_v2
+  @show rhs_v1 ≈ rhs_v2
+  nothing
 end
