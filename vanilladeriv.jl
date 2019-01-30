@@ -2,6 +2,22 @@ using LinearAlgebra
 using Random
 using GPUifyLoops
 
+const HAVE_CUDA = try
+  using CUDAdrv
+  using CUDAnative
+  true
+catch
+  false
+end
+if !HAVE_CUDA
+  macro cuStaticSharedMem(x...)
+    :()
+  end
+  macro cuda(x...)
+    :()
+  end
+end
+
 # {{{ constants
 # note the order of the fields below is also assumed in the code.
 const _nstate = 5
@@ -212,10 +228,10 @@ end
 # }}}
 
 # {{{ Volume RHS for 3-D
-function volumerhs_v2!(::Val{3}, ::Val{N}, ::Val{nmoist}, ::Val{ntrace},
-                       rhs::Array, Q, vgeo, gravity, D,
-                       elems) where {N, nmoist, ntrace}
-  @setup :CPU
+function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
+                       ::Val{ntrace}, rhs::Array, Q, vgeo, gravity, D,
+                       elems) where {DEV, N, nmoist, ntrace}
+  @setup DEV
 
   DFloat = eltype(Q)
 
@@ -229,12 +245,21 @@ function volumerhs_v2!(::Val{3}, ::Val{N}, ::Val{nmoist}, ::Val{ntrace},
   rhs = reshape(rhs, Nq, Nq, Nq, nvar, nelem)
   vgeo = reshape(vgeo, Nq, Nq, Nq, _nvgeo, nelem)
 
-  s_D = Array{DFloat}(undef, Nq, Nq)
-  s_F = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
-  s_G = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
-  s_H = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
+  if __DEVICE == Val(:CPU)
+    s_D = Array{DFloat}(undef, Nq, Nq)
+    s_F = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
+    s_G = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
+    s_H = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
 
-  l_ρinv = Array{DFloat}(undef, Nq, Nq, Nq)
+    l_ρinv = Array{DFloat}(undef, Nq, Nq, Nq)
+  else
+    s_D = @cuStaticSharedMem(eltype(D), (Nq, Nq))
+    s_F = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq), _nstate)
+    s_G = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq), _nstate)
+    s_H = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq), _nstate)
+
+    l_ρinv = zero(DFloat)
+  end
 
   @loop for e in (elems; blockIdx().x)
     @loop for k in (1:Nq; threadIdx().z)
@@ -257,7 +282,11 @@ function volumerhs_v2!(::Val{3}, ::Val{N}, ::Val{nmoist}, ::Val{ntrace},
 
           P = gdm1*(E - (U^2 + V^2 + W^2)/(2*ρ) - ρ*gravity*z)
 
-          l_ρinv[i, j, k] = ρinv = 1 / ρ
+          if __DEVICE == Val(:CPU)
+            l_ρinv[i, j, k] = ρinv = 1 / ρ
+          else
+            l_ρinv = ρinv = 1 / ρ
+          end
           fluxρ_x = U
           fluxU_x = ρinv * U * U + P
           fluxV_x = ρinv * U * V
@@ -369,9 +398,15 @@ function volumerhs_v2!(::Val{3}, ::Val{N}, ::Val{nmoist}, ::Val{ntrace},
             V = Q[i, j, k, _V, e]
             W = Q[i, j, k, _W, e]
 
-            fx = U * l_ρinv[i, j, k] * Qmoist
-            fy = V * l_ρinv[i, j, k] * Qmoist
-            fz = W * l_ρinv[i, j, k] * Qmoist
+            if __DEVICE == Val(:CPU)
+              fx = U * l_ρinv[i, j, k] * Qmoist
+              fy = V * l_ρinv[i, j, k] * Qmoist
+              fz = W * l_ρinv[i, j, k] * Qmoist
+            else
+              fx = U * l_ρinv * Qmoist
+              fy = V * l_ρinv * Qmoist
+              fz = W * l_ρinv * Qmoist
+            end
 
             s_F[i, j, k, 1] = MJ * (ξx * fx + ξy * fy + ξz * fz)
             s_G[i, j, k, 1] = MJ * (ηx * fx + ηy * fy + ηz * fz)
@@ -425,9 +460,15 @@ function volumerhs_v2!(::Val{3}, ::Val{N}, ::Val{nmoist}, ::Val{ntrace},
             V = Q[i, j, k, _V, e]
             W = Q[i, j, k, _W, e]
 
-            fx = U * l_ρinv[i, j, k] * Qtrace
-            fy = V * l_ρinv[i, j, k] * Qtrace
-            fz = W * l_ρinv[i, j, k] * Qtrace
+            if __DEVICE == Val(:CPU)
+              fx = U * l_ρinv[i, j, k] * Qtrace
+              fy = V * l_ρinv[i, j, k] * Qtrace
+              fz = W * l_ρinv[i, j, k] * Qtrace
+            else
+              fx = U * l_ρinv * Qtrace
+              fy = V * l_ρinv * Qtrace
+              fz = W * l_ρinv * Qtrace
+            end
 
             s_F[i, j, k, 1] = MJ * (ξx * fx + ξy * fy + ξz * fz)
             s_G[i, j, k, 1] = MJ * (ηx * fx + ηy * fy + ηz * fz)
@@ -481,10 +522,24 @@ function main(nelem, N, DFloat)
   @show norm_v1 = norm(rhs_v1)
 
   rhs_v2 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-  volumerhs_v2!(Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q, vgeo,
-                DFloat(grav), D, 1:nelem)
+  volumerhs_v2!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
+                vgeo, DFloat(grav), D, 1:nelem)
   @show norm_v2 = norm(rhs_v2)
   @show norm_v1 - norm_v2
+
+  if HAVE_CUDA
+    rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+    d_Q = CuArray(Q)
+    d_D = CuArray(D)
+    d_vgeo = CuArray(vgeo)
+    d_rhs_v3 = CuArray(rhs_v3)
+    @cuda(threads=(N+1, N+1, N+1), blocks=nelem,
+          volumerhs_v2!(Val(:GPU), Val(3), Val(N), Val(nmoist), Val(ntrace),
+                        d_rhs_v2, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+    rhs_v3 .= d_rhs_v3
+    @show norm_v3 = norm(rhs_v3)
+    @show norm_v1 - norm_v3
+  end
 
   nothing
 end
