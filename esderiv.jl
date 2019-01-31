@@ -1,5 +1,6 @@
 using LinearAlgebra
 using Random
+using StaticArrays
 
 # {{{ constants
 # note the order of the fields below is also assumed in the code.
@@ -89,6 +90,58 @@ function flux(q, z, gravity)
   F
 end
 
+function _flux_v2(q, z, gravity)
+    q_v2 = (ρ = q[:, _ρ], U = map(SVector{3}, q[:, _U], q[:, _V], q[:, _W]), E = q[:, _E])
+    F_v2 = flux_v2(q_v2, z, gravity)
+    F = similar(q, size(q, 1), size(q, 1), size(q, 2), 3)
+    for n = 1:size(q, 1)
+          for m = 1:size(q, 1)
+              #const _ρ, _U, _V, _W, _E = 1:_nstate
+              F[n, m, 1, :] = F_v2.ρ[n, m]
+              F[n, m, 2:4, :] = F_v2.U[n, m]
+              F[n, m, 5, :] = F_v2.E[n, m]
+          end
+    end
+    return F
+end
+
+
+
+function flux_v2(q, z, gravity)
+  F = (ρ = similar(q.ρ, SVector{3, eltype(q.ρ)}, size(q.U, 1), size(q.U, 1)),
+       U = similar(q.U, SMatrix{3, 3, eltype(eltype(q.U))}, size(q.U, 1), size(q.U, 1)),
+       E = similar(q.E, SVector{3, eltype(q.E)}, size(q.U, 1), size(q.U, 1)))
+  for n = eachindex(q.U)
+    for m = eachindex(q.U)
+      (F.ρ[n, m], F.U[n, m], F.E[n, m]) =
+        flux_v2!((ρ = q.ρ[n], U = q.U[n], E = q.E[n], z = z[n]),
+                 (ρ = q.ρ[m], U = q.U[m], E = q.E[m], z = z[m]), gravity)
+    end
+  end
+  F
+end
+
+function flux_v2!(M, P, gravity)
+  (M, P) = map((M, P)) do q
+    u = q.U/q.ρ
+    P = gdm1*(q.E - q.U'*q.U/(2q.ρ) - q.ρ*gravity*q.z)
+    β = q.ρ / 2P
+    q = (q..., u=u, P=P, β = β)
+  end
+
+  ua = (M.u + P.u) / 2
+  u2a = (M.u'*M.u + P.u'*P.u) / 2
+  ρa  = (M.ρ + P.ρ) / 2
+  βa = (M.β + P.β) / 2
+  ρln = aln(M.ρ, P.ρ)
+  βln = aln(M.β, P.β)
+  ϕa = gravity * (M.z + P.z) / 2
+
+  ρ = ρln * ua
+  U = ρ * ua' + I * ρa/2βa
+  E = U' * ua + ρ * (1 / (2*gdm1*βln) - u2a / 2 + ϕa)
+  F = (ρ, U, E)
+end
 
 
 # {{{ Volume RHS for 3-D
@@ -255,7 +308,7 @@ function volumerhs_v2!(::Val{3}, ::Val{N}, rhs::Array, Q, vgeo, gravity, D,
 
   @inbounds for e in elems
 
-    F = flux(Q[:, :, e], vgeo[:, _z, e], gravity)
+    F = _flux_v2(Q[:, :, e], vgeo[:, _z, e], gravity)
 
     G = ((vgeo[:, _ξx, e] .* vgeo[:, _MJ, e],
           vgeo[:, _ξy, e] .* vgeo[:, _MJ, e],
