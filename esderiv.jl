@@ -301,3 +301,5 @@ function main(nelem, N, DFloat)
   @show rhs_v1 ≈ rhs_v2
   nothing
 end
+
+main(100, 2, Float64)
