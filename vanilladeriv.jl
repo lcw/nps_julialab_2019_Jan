@@ -245,16 +245,13 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
     s_F = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
     s_G = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
     s_H = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
-
-    l_ρinv = Array{DFloat}(undef, Nq, Nq, Nq)
   else
     s_D = @cuStaticSharedMem(eltype(D), (Nq, Nq))
     s_F = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
     s_G = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
     s_H = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
-
-    l_ρinv = zero(DFloat)
   end
+  l_ρinv = @scratch DFloat (Nq, Nq, Nq) 3
 
   @loop for e in (1:nelem; blockIdx().x)
     @loop for k in (1:Nq; threadIdx().z)
@@ -277,11 +274,7 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
 
           P = gdm1*(E - (U^2 + V^2 + W^2)/(2*ρ) - ρ*gravity*z)
 
-          if __DEVICE == Val(:CPU)
-            l_ρinv[i, j, k] = ρinv = 1 / ρ
-          else
-            l_ρinv = ρinv = 1 / ρ
-          end
+          l_ρinv[i, j, k] = ρinv = 1 / ρ
           fluxρ_x = U
           fluxU_x = ρinv * U * U + P
           fluxV_x = ρinv * U * V
@@ -393,15 +386,9 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
             V = Q[i, j, k, _V, e]
             W = Q[i, j, k, _W, e]
 
-            if __DEVICE == Val(:CPU)
-              fx = U * l_ρinv[i, j, k] * Qmoist
-              fy = V * l_ρinv[i, j, k] * Qmoist
-              fz = W * l_ρinv[i, j, k] * Qmoist
-            else
-              fx = U * l_ρinv * Qmoist
-              fy = V * l_ρinv * Qmoist
-              fz = W * l_ρinv * Qmoist
-            end
+            fx = U * l_ρinv[i, j, k] * Qmoist
+            fy = V * l_ρinv[i, j, k] * Qmoist
+            fz = W * l_ρinv[i, j, k] * Qmoist
 
             s_F[i, j, k, 1] = MJ * (ξx * fx + ξy * fy + ξz * fz)
             s_G[i, j, k, 1] = MJ * (ηx * fx + ηy * fy + ηz * fz)
@@ -455,15 +442,9 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
             V = Q[i, j, k, _V, e]
             W = Q[i, j, k, _W, e]
 
-            if __DEVICE == Val(:CPU)
-              fx = U * l_ρinv[i, j, k] * Qtrace
-              fy = V * l_ρinv[i, j, k] * Qtrace
-              fz = W * l_ρinv[i, j, k] * Qtrace
-            else
-              fx = U * l_ρinv * Qtrace
-              fy = V * l_ρinv * Qtrace
-              fz = W * l_ρinv * Qtrace
-            end
+            fx = U * l_ρinv[i, j, k] * Qtrace
+            fy = V * l_ρinv[i, j, k] * Qtrace
+            fz = W * l_ρinv[i, j, k] * Qtrace
 
             s_F[i, j, k, 1] = MJ * (ξx * fx + ξy * fy + ξz * fz)
             s_G[i, j, k, 1] = MJ * (ηx * fx + ηy * fy + ηz * fz)
