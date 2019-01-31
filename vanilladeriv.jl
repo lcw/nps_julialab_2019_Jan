@@ -5,6 +5,7 @@ using GPUifyLoops
 const HAVE_CUDA = try
   using CUDAdrv
   using CUDAnative
+  using CuArrays
   true
 catch
   false
@@ -229,8 +230,8 @@ end
 
 # {{{ Volume RHS for 3-D
 function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
-                       ::Val{ntrace}, rhs::Array, Q, vgeo, gravity, D,
-                       elems) where {DEV, N, nmoist, ntrace}
+                       ::Val{ntrace}, rhs, Q, vgeo, gravity, D,
+                       nelem) where {DEV, N, nmoist, ntrace}
   @setup DEV
 
   DFloat = eltype(Q)
@@ -238,12 +239,6 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
   nvar = _nstate + nmoist + ntrace
 
   Nq = N + 1
-
-  nelem = size(Q)[end]
-
-  Q = reshape(Q, Nq, Nq, Nq, nvar, nelem)
-  rhs = reshape(rhs, Nq, Nq, Nq, nvar, nelem)
-  vgeo = reshape(vgeo, Nq, Nq, Nq, _nvgeo, nelem)
 
   if __DEVICE == Val(:CPU)
     s_D = Array{DFloat}(undef, Nq, Nq)
@@ -254,14 +249,14 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
     l_ρinv = Array{DFloat}(undef, Nq, Nq, Nq)
   else
     s_D = @cuStaticSharedMem(eltype(D), (Nq, Nq))
-    s_F = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq), _nstate)
-    s_G = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq), _nstate)
-    s_H = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq), _nstate)
+    s_F = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
+    s_G = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
+    s_H = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
 
     l_ρinv = zero(DFloat)
   end
 
-  @loop for e in (elems; blockIdx().x)
+  @loop for e in (1:nelem; blockIdx().x)
     @loop for k in (1:Nq; threadIdx().z)
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)
@@ -501,6 +496,7 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
       end
     end
   end
+  nothing
 end
 # }}}
 
@@ -521,9 +517,13 @@ function main(nelem, N, DFloat)
                 DFloat(grav), D, 1:nelem)
   @show norm_v1 = norm(rhs_v1)
 
+  Q = reshape(Q, Nq, Nq, Nq, nvar, nelem)
+  rhs_v1 = reshape(rhs_v1, Nq, Nq, Nq, nvar, nelem)
+  vgeo = reshape(vgeo, Nq, Nq, Nq, _nvgeo, nelem)
+
   rhs_v2 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
   volumerhs_v2!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
-                vgeo, DFloat(grav), D, 1:nelem)
+                vgeo, DFloat(grav), D, nelem)
   @show norm_v2 = norm(rhs_v2)
   @show norm_v1 - norm_v2
 
@@ -533,9 +533,10 @@ function main(nelem, N, DFloat)
     d_D = CuArray(D)
     d_vgeo = CuArray(vgeo)
     d_rhs_v3 = CuArray(rhs_v3)
+
     @cuda(threads=(N+1, N+1, N+1), blocks=nelem,
           volumerhs_v2!(Val(:GPU), Val(3), Val(N), Val(nmoist), Val(ntrace),
-                        d_rhs_v2, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+                        d_rhs_v3, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
     rhs_v3 .= d_rhs_v3
     @show norm_v3 = norm(rhs_v3)
     @show norm_v1 - norm_v3
