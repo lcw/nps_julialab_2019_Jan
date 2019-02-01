@@ -240,17 +240,10 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
 
   Nq = N + 1
 
-  if __DEVICE == Val(:CPU)
-    s_D = Array{DFloat}(undef, Nq, Nq)
-    s_F = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
-    s_G = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
-    s_H = Array{DFloat}(undef, Nq, Nq, Nq, _nstate)
-  else
-    s_D = @cuStaticSharedMem(eltype(D), (Nq, Nq))
-    s_F = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
-    s_G = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
-    s_H = @cuStaticSharedMem(eltype(Q), (Nq, Nq, Nq, _nstate))
-  end
+  s_D = @shmem DFloat (Nq, Nq)
+  s_F = @shmem DFloat (Nq, Nq, Nq, _nstate)
+  s_G = @shmem DFloat (Nq, Nq, Nq, _nstate)
+  s_H = @shmem DFloat (Nq, Nq, Nq, _nstate)
   l_ρinv = @scratch DFloat (Nq, Nq, Nq) 3
 
   @loop for e in (1:nelem; blockIdx().x)
