@@ -42,7 +42,6 @@ Base.@irrational cv_d 717.5060234725578 BigFloat(717.5060234725578)
 Base.@irrational gamma_d 1.4 BigFloat(1.4)
 Base.@irrational gdm1 0.4 BigFloat(0.4)
 
-
 # {{{ Volume RHS for 3-D
 function volumerhs_v1!(::Val{3}, ::Val{N}, ::Val{nmoist}, ::Val{ntrace},
                        rhs::Array, Q, vgeo, gravity, D,
@@ -473,6 +472,17 @@ function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
   nothing
 end
 # }}}
+
+using StaticArrays
+struct EulerDOF{dim, DFloat}
+  ρ::DFloat
+  U::SVector{dim, DFloat}
+  E::DFloat
+  function EulerDOF(ρ::DFloat,U::SVector{dim, DFloat},E::DFloat) where dim where DFloat
+    new{dim, DFloat}(ρ, U, E)
+  end
+  EulerDOF(;ρ=nothing,U=nothing,E=nothing) = EulerDOF(ρ, U, E)
+end
 
 function main(nelem, N, DFloat)
   rnd = MersenneTwister(0)
