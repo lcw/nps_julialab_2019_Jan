@@ -653,7 +653,7 @@ function main(nelem, N, DFloat)
 
   Nq = N + 1
   Q = 1 .+ rand(rnd, DFloat, Nq, Nq, Nq, nvar, nelem)
-  Q[:, :, :, _E, :] .+= 100
+  Q[:, :, :, _E, :] .+= 20
   vgeo = rand(rnd, DFloat, Nq, Nq, Nq, _nvgeo, nelem)
   D = rand(rnd, DFloat, Nq, Nq)
 
