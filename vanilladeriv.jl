@@ -672,6 +672,12 @@ function main(nelem, N, DFloat)
   @show norm_v2 = norm(rhs_v2)
   @show norm_v1 - norm_v2
 
+  rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+  volumerhs_v3!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
+                vgeo, DFloat(grav), D, nelem)
+  @show norm_v3 = norm(rhs_v3)
+  @show (norm_v1 - norm_v3) / norm_v1
+
   if HAVE_CUDA
     rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_Q = CuArray(Q)
