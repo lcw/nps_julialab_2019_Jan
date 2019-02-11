@@ -498,12 +498,12 @@ function volumerhs_v3!(::Val{DEV},
     s_F = @shmem DFloat (Nq, Nq, _nstate)
     s_G = @shmem DFloat (Nq, Nq, _nstate)
     s_H = @shmem DFloat (Nq, Nq, _nstate)
-#    l_ρinv = @shmem DFloat (Nq, Nq, Nq) 
     
     r_rhsρ = @scratch DFloat (Nq, Nq, Nq) 2
     r_rhsU = @scratch DFloat (Nq, Nq, Nq) 2
     r_rhsV = @scratch DFloat (Nq, Nq, Nq) 2
     r_rhsW = @scratch DFloat (Nq, Nq, Nq) 2
+    r_rhsE = @scratch DFloat (Nq, Nq, Nq) 2
     
     @inbounds @loop for e in (1:nelem; blockIdx().x)
         
@@ -514,6 +514,7 @@ function volumerhs_v3!(::Val{DEV},
                     r_rhsU[k, i, j] = 0
                     r_rhsV[k, i, j] = 0
                     r_rhsW[k, i, j] = 0
+                    r_rhsE[k, i, j] = 0
                 end
                 
                 # fetch D into shared
@@ -626,136 +627,20 @@ function volumerhs_v3!(::Val{DEV},
             end
         end // k
 
-        @loop for j in (1:Nq; threadIdx().y)
-            @loop for i in (1:Nq; threadIdx().x)
-                
-                for k in (1:Nq)
-                    
-                    rhs[i, j, k, _U, e] += MJI*r_rhsU[k, i, j]
-                    rhs[i, j, k, _V, e] += MJI*r_rhsV[k, i, j]
-                    rhs[i, j, k, _W, e] += MJI*r_rhsW[k, i, j]
-                    rhs[i, j, k, _ρ, e] += MJI*r_rhsρ[k, i, j]
-                    rhs[i, j, k, _E, e] += MJI*r_rhsE[k, i, j]
-                end
-            end
+   @loop for j in (1:Nq; threadIdx().y)
+      @loop for i in (1:Nq; threadIdx().x)
+        
+        for k in (1:Nq)
+            
+            rhs[i, j, k, _U, e] += MJI*r_rhsU[k, i, j]
+            rhs[i, j, k, _V, e] += MJI*r_rhsV[k, i, j]
+            rhs[i, j, k, _W, e] += MJI*r_rhsW[k, i, j]
+            rhs[i, j, k, _ρ, e] += MJI*r_rhsρ[k, i, j]
+            rhs[i, j, k, _E, e] += MJI*r_rhsE[k, i, j]
         end
-
-#=
-# loop over moist variables
-# FIXME: Currently just passive advection
-# TODO: This should probably be unrolled by some factor
-rhsmoist = zero(eltype(rhs))
-for m = 1:nmoist
-    s = _nstate + m
-
-    @synchronize
-
-    @loop for k in (1:Nq; threadIdx().z)
-        @loop for j in (1:Nq; threadIdx().y)
-            @loop for i in (1:Nq; threadIdx().x)
-                MJ = vgeo[i, j, k, _MJ, e]
-                ξx, ξy, ξz = vgeo[i,j,k,_ξx,e], vgeo[i,j,k,_ξy,e], vgeo[i,j,k,_ξz,e]
-                ηx, ηy, ηz = vgeo[i,j,k,_ηx,e], vgeo[i,j,k,_ηy,e], vgeo[i,j,k,_ηz,e]
-                ζx, ζy, ζz = vgeo[i,j,k,_ζx,e], vgeo[i,j,k,_ζy,e], vgeo[i,j,k,_ζz,e]
-
-                Qmoist = Q[i, j, k, s, e]
-                U = Q[i, j, k, _U, e]
-                V = Q[i, j, k, _V, e]
-                W = Q[i, j, k, _W, e]
-
-                fx = U * l_ρinv[i, j, k] * Qmoist
-                fy = V * l_ρinv[i, j, k] * Qmoist
-                fz = W * l_ρinv[i, j, k] * Qmoist
-
-                s_F[i, j, k, 1] = MJ * (ξx * fx + ξy * fy + ξz * fz)
-                s_G[i, j, k, 1] = MJ * (ηx * fx + ηy * fy + ηz * fz)
-                s_H[i, j, k, 1] = MJ * (ζx * fx + ζy * fy + ζz * fz)
-            end
-        end
-    end
-
-    @synchronize
-
-    @loop for k in (1:Nq; threadIdx().z)
-        @loop for j in (1:Nq; threadIdx().y)
-            @loop for i in (1:Nq; threadIdx().x)
-                # TODO: Prefetch MJI and rhs
-                MJI = vgeo[i, j, k, _MJI, e]
-
-                rhsmoist = zero(DFloat)
-                for n = 1:Nq
-                    MJI_Dni = MJI * s_D[n, i]
-                    MJI_Dnj = MJI * s_D[n, j]
-                    MJI_Dnk = MJI * s_D[n, k]
-
-                    rhsmoist += MJI_Dni * s_F[n, j, k, 1]
-                    rhsmoist += MJI_Dnj * s_G[i, n, k, 1]
-                    rhsmoist += MJI_Dnk * s_H[i, j, n, 1]
-                end
-                rhs[i, j, k, s, e] += rhsmoist
-            end
-        end
-    end
+      end
+   end
 end
-
-# Loop over trace variables
-# TODO: This should probably be unrolled by some factor
-rhstrace = zero(eltype(rhs))
-for m = 1:ntrace
-    s = _nstate + nmoist + m
-
-    @synchronize
-
-    @loop for k in (1:Nq; threadIdx().z)
-        @loop for j in (1:Nq; threadIdx().y)
-            @loop for i in (1:Nq; threadIdx().x)
-                MJ = vgeo[i, j, k, _MJ, e]
-                ξx, ξy, ξz = vgeo[i,j,k,_ξx,e], vgeo[i,j,k,_ξy,e], vgeo[i,j,k,_ξz,e]
-                ηx, ηy, ηz = vgeo[i,j,k,_ηx,e], vgeo[i,j,k,_ηy,e], vgeo[i,j,k,_ηz,e]
-                ζx, ζy, ζz = vgeo[i,j,k,_ζx,e], vgeo[i,j,k,_ζy,e], vgeo[i,j,k,_ζz,e]
-
-                Qtrace = Q[i, j, k, s, e]
-                U = Q[i, j, k, _U, e]
-                V = Q[i, j, k, _V, e]
-                W = Q[i, j, k, _W, e]
-
-                fx = U * l_ρinv[i, j, k] * Qtrace
-                fy = V * l_ρinv[i, j, k] * Qtrace
-                fz = W * l_ρinv[i, j, k] * Qtrace
-
-                s_F[i, j, k, 1] = MJ * (ξx * fx + ξy * fy + ξz * fz)
-                s_G[i, j, k, 1] = MJ * (ηx * fx + ηy * fy + ηz * fz)
-                s_H[i, j, k, 1] = MJ * (ζx * fx + ζy * fy + ζz * fz)
-            end
-        end
-    end
-
-    @synchronize
-
-    @loop for k in (1:Nq; threadIdx().z)
-        @loop for j in (1:Nq; threadIdx().y)
-            @loop for i in (1:Nq; threadIdx().x)
-                # TODO: Prefetch MJI and rhs
-                MJI = vgeo[i, j, k, _MJI, e]
-
-                rhstrace = zero(DFloat)
-                for n = 1:Nq
-                    MJI_Dni = MJI * s_D[n, i]
-                    MJI_Dnj = MJI * s_D[n, j]
-                    MJI_Dnk = MJI * s_D[n, k]
-
-                    rhstrace += MJI_Dni * s_F[n, j, k, 1]
-                    rhstrace += MJI_Dnj * s_G[i, n, k, 1]
-                    rhstrace += MJI_Dnk * s_H[i, j, n, 1]
-                end
-                rhs[i, j, k, s, e] += rhstrace
-            end
-        end
-    end
-end
-end
-
-=#
 nothing
 end
 # }}}
@@ -797,7 +682,7 @@ function main(nelem, N, DFloat)
         d_rhs_v3 = CuArray(rhs_v3)
 
         @cuda(threads=(N+1, N+1, N+1), blocks=nelem,
-              volumerhs_v2!(Val(:GPU), Val(3), Val(N), Val(nmoist), Val(ntrace),
+              volumerhs_v3!(Val(:GPU), Val(3), Val(N), Val(nmoist), Val(ntrace),
                             d_rhs_v3, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
         rhs_v3 .= d_rhs_v3
         @show norm_v3 = norm(rhs_v3)
