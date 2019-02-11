@@ -647,8 +647,8 @@ end
 
 function main(nelem, N, DFloat)
   rnd = MersenneTwister(0)
-  nmoist = 3
-  ntrace = 5
+  nmoist = 0
+  ntrace = 0
   nvar = _nstate + nmoist + ntrace
 
   Nq = N + 1
