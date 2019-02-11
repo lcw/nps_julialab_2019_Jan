@@ -1,6 +1,7 @@
 using LinearAlgebra
 using Random
 using GPUifyLoops
+using StaticArrays
 
 const HAVE_CUDA = try
     using CUDAdrv
@@ -500,21 +501,33 @@ function volumerhs_v3!(::Val{DEV},
   s_G = @shmem DFloat (Nq, Nq, _nstate)
   s_H = @shmem DFloat (Nq, Nq, _nstate)
 
-  r_rhsρ = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsU = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsV = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsW = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsE = @scratch DFloat (Nq, Nq, Nq) 2
+  # r_rhsρ = @scratch DFloat (Nq, Nq, Nq) 2
+  # r_rhsU = @scratch DFloat (Nq, Nq, Nq) 2
+  # r_rhsV = @scratch DFloat (Nq, Nq, Nq) 2
+  # r_rhsW = @scratch DFloat (Nq, Nq, Nq) 2
+  # r_rhsE = @scratch DFloat (Nq, Nq, Nq) 2
 
-  @inbounds @loop for e in (1:nelem; blockIdx().x)
+  r_rhsρ = MArray{Tuple{Nq}, DFloat}(undef)
+  r_rhsU = MArray{Tuple{Nq}, DFloat}(undef)
+  r_rhsV = MArray{Tuple{Nq}, DFloat}(undef)
+  r_rhsW = MArray{Tuple{Nq}, DFloat}(undef)
+  r_rhsE = MArray{Tuple{Nq}, DFloat}(undef)
+
+  #r_rhsρ = @shmem DFloat (Nq, Nq, Nq)
+  #r_rhsU = @shmem DFloat (Nq, Nq, Nq)
+  #r_rhsV = @shmem DFloat (Nq, Nq, Nq)
+  #r_rhsW = @shmem DFloat (Nq, Nq, Nq)
+  #r_rhsE = @shmem DFloat (Nq, Nq, Nq)
+
+  @loop for e in (1:nelem; blockIdx().x)
     @loop for j in (1:Nq; threadIdx().y)
       @loop for i in (1:Nq; threadIdx().x)
         for k in (1:Nq)
-          r_rhsρ[k, i, j] = 0
-          r_rhsU[k, i, j] = 0
-          r_rhsV[k, i, j] = 0
-          r_rhsW[k, i, j] = 0
-          r_rhsE[k, i, j] = 0
+          r_rhsρ[k] = 0
+          r_rhsU[k] = 0
+          r_rhsV[k] = 0
+          r_rhsW[k] = 0
+          r_rhsE[k] = 0
         end
 
         # fetch D into shared
@@ -583,11 +596,11 @@ function volumerhs_v3!(::Val{DEV},
           for n = 1:Nq
             Dkn = s_D[k, n]
 
-            r_rhsρ[n,i,j] += Dkn * r_Hρ
-            r_rhsU[n,i,j] += Dkn * r_HU
-            r_rhsV[n,i,j] += Dkn * r_HV
-            r_rhsW[n,i,j] += Dkn * r_HW
-            r_rhsE[n,i,j] += Dkn * r_HE
+            r_rhsρ[n] += Dkn * r_Hρ
+            r_rhsU[n] += Dkn * r_HU
+            r_rhsV[n] += Dkn * r_HV
+            r_rhsW[n] += Dkn * r_HW
+            r_rhsE[n] += Dkn * r_HE
           end
         end
       end
@@ -598,27 +611,27 @@ function volumerhs_v3!(::Val{DEV},
         @loop for i in (1:Nq; threadIdx().x)
           # buoyancy term
           ρ = Q[i, j, k, _ρ, e]
-          r_rhsW[i,j,k] -= ρ * gravity
+          r_rhsW[k] -= ρ * gravity
 
           # loop of ξ-grid lines
           for n = 1:Nq
             Dni = s_D[n, i]
             Dnj = s_D[n, j]
 
-            r_rhsρ[k,i,j] += Dni * s_F[n, j, _ρ]
-            r_rhsρ[k,i,j] += Dnj * s_G[i, n, _ρ]
+            r_rhsρ[k] += Dni * s_F[n, j, _ρ]
+            r_rhsρ[k] += Dnj * s_G[i, n, _ρ]
 
-            r_rhsU[k,i,j] += Dni * s_F[n, j, _U]
-            r_rhsU[k,i,j] += Dnj * s_G[i, n, _U]
+            r_rhsU[k] += Dni * s_F[n, j, _U]
+            r_rhsU[k] += Dnj * s_G[i, n, _U]
 
-            r_rhsV[k,i,j] += Dni * s_F[n, j, _V]
-            r_rhsV[k,i,j] += Dnj * s_G[i, n, _V]
+            r_rhsV[k] += Dni * s_F[n, j, _V]
+            r_rhsV[k] += Dnj * s_G[i, n, _V]
 
-            r_rhsW[k,i,j] += Dni * s_F[n, j, _W]
-            r_rhsW[k,i,j] += Dnj * s_G[i, n, _W]
+            r_rhsW[k] += Dni * s_F[n, j, _W]
+            r_rhsW[k] += Dnj * s_G[i, n, _W]
 
-            r_rhsE[k,i,j] += Dni * s_F[n, j, _E]
-            r_rhsE[k,i,j] += Dnj * s_G[i, n, _E]
+            r_rhsE[k] += Dni * s_F[n, j, _E]
+            r_rhsE[k] += Dnj * s_G[i, n, _E]
           end 
         end 
       end
@@ -630,11 +643,11 @@ function volumerhs_v3!(::Val{DEV},
         for k in (1:Nq)
           MJI = vgeo[i, j, k, _MJI, e]
 
-          rhs[i, j, k, _U, e] += MJI*r_rhsU[k, i, j]
-          rhs[i, j, k, _V, e] += MJI*r_rhsV[k, i, j]
-          rhs[i, j, k, _W, e] += MJI*r_rhsW[k, i, j]
-          rhs[i, j, k, _ρ, e] += MJI*r_rhsρ[k, i, j]
-          rhs[i, j, k, _E, e] += MJI*r_rhsE[k, i, j]
+          rhs[i, j, k, _U, e] += MJI*r_rhsU[k]
+          rhs[i, j, k, _V, e] += MJI*r_rhsV[k]
+          rhs[i, j, k, _W, e] += MJI*r_rhsW[k]
+          rhs[i, j, k, _ρ, e] += MJI*r_rhsρ[k]
+          rhs[i, j, k, _E, e] += MJI*r_rhsE[k]
         end
       end
     end
@@ -642,8 +655,6 @@ function volumerhs_v3!(::Val{DEV},
   nothing
 end
 # }}}
-
-
 
 function main(nelem, N, DFloat)
   rnd = MersenneTwister(0)
@@ -672,13 +683,14 @@ function main(nelem, N, DFloat)
   @show norm_v2 = norm(rhs_v2)
   @show norm_v1 - norm_v2
 
-  rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-  volumerhs_v3!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
-                vgeo, DFloat(grav), D, nelem)
-  @show norm_v3 = norm(rhs_v3)
-  @show (norm_v1 - norm_v3) / norm_v1
+  # rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+  # volumerhs_v3!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
+  #               vgeo, DFloat(grav), D, nelem)
+  # @show norm_v3 = norm(rhs_v3)
+  # @show (norm_v1 - norm_v3) / norm_v1
 
   if HAVE_CUDA
+    @show "On GPU"
     rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_Q = CuArray(Q)
     d_D = CuArray(D)
