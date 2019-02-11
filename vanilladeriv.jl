@@ -595,10 +595,6 @@ function volumerhs_v3!(::Val{DEV},
 
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)
-          # TODO: Prefetch MJI and rhs
-
-          MJI = vgeo[i, j, k, _MJI, e]
-
           # buoyancy term
           ρ = Q[i, j, k, _ρ, e]
           r_rhsW[i,j,k] -= ρ * gravity
@@ -631,6 +627,7 @@ function volumerhs_v3!(::Val{DEV},
       @loop for i in (1:Nq; threadIdx().x)
 
         for k in (1:Nq)
+          MJI = vgeo[i, j, k, _MJI, e]
 
           rhs[i, j, k, _U, e] += MJI*r_rhsU[k, i, j]
           rhs[i, j, k, _V, e] += MJI*r_rhsV[k, i, j]
