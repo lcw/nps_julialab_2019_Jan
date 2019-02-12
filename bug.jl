@@ -1,4 +1,3 @@
-using GPUifyLoops
 using StaticArrays
 
 const HAVE_CUDA = try
@@ -9,19 +8,8 @@ const HAVE_CUDA = try
 catch
     false
 end
-if !HAVE_CUDA
-    macro cuStaticSharedMem(x...)
-        :()
-    end
-    macro cuda(x...)
-        :()
-    end
-end
 
-function knl!(::Val{DEV}, a) where {DEV}
-  @setup DEV
-
-  # r_a = @scratch Float32 (4, 5, 5) 2
+function knl!(a)
   r_a = MArray{Tuple{4}, Float32}(undef)
 
   for k in 1:4
@@ -36,7 +24,7 @@ function main()
     a = zeros(Float32, 4000)
     d_a = CuArray(a)
 
-    @cuda(threads=(5, 5), blocks=4000, knl!(Val(:GPU), d_a))
+    @cuda(threads=(5, 5), blocks=4000, knl!(d_a))
 
     a .= d_a
   end
