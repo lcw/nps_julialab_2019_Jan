@@ -492,14 +492,14 @@ function volumerhs_v3!(::Val{DEV},
 
   DFloat = eltype(Q)
 
-  nvar = _nstate + nmoist + ntrace
+  # nvar = _nstate + nmoist + ntrace
 
   Nq = N + 1
 
-  s_D = @shmem DFloat (Nq, Nq)
-  s_F = @shmem DFloat (Nq, Nq, _nstate)
-  s_G = @shmem DFloat (Nq, Nq, _nstate)
-  s_H = @shmem DFloat (Nq, Nq, _nstate)
+  # s_D = @shmem DFloat (Nq, Nq)
+  # s_F = @shmem DFloat (Nq, Nq, _nstate)
+  # s_G = @shmem DFloat (Nq, Nq, _nstate)
+  # s_H = @shmem DFloat (Nq, Nq, _nstate)
 
   # r_rhsρ = @scratch DFloat (Nq, Nq, Nq) 2
   # r_rhsU = @scratch DFloat (Nq, Nq, Nq) 2
@@ -513,12 +513,23 @@ function volumerhs_v3!(::Val{DEV},
   r_rhsW = MArray{Tuple{Nq}, DFloat}(undef)
   r_rhsE = MArray{Tuple{Nq}, DFloat}(undef)
 
+  for k in 1:Nq
+    r_rhsρ[k] = 0
+    r_rhsU[k] = 0
+    r_rhsV[k] = 0
+    r_rhsW[k] = 0
+    r_rhsE[k] = 0
+  end
+
+
+
   #r_rhsρ = @shmem DFloat (Nq, Nq, Nq)
   #r_rhsU = @shmem DFloat (Nq, Nq, Nq)
   #r_rhsV = @shmem DFloat (Nq, Nq, Nq)
   #r_rhsW = @shmem DFloat (Nq, Nq, Nq)
   #r_rhsE = @shmem DFloat (Nq, Nq, Nq)
 
+  #=
   @loop for e in (1:nelem; blockIdx().x)
     @loop for j in (1:Nq; threadIdx().y)
       @loop for i in (1:Nq; threadIdx().x)
@@ -531,9 +542,10 @@ function volumerhs_v3!(::Val{DEV},
         end
 
         # fetch D into shared
-        s_D[i, j] = D[i, j]
+        # s_D[i, j] = D[i, j]
       end
     end
+  #=
 
     for k in (1:Nq)
       @synchronize
@@ -651,7 +663,9 @@ function volumerhs_v3!(::Val{DEV},
         end
       end
     end
+  =#
   end
+  =#
   nothing
 end
 # }}}
