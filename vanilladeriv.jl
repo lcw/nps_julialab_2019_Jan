@@ -740,8 +740,6 @@ function volumerhs_v4!(::Val{DEV},
 
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)
-
-          # loop of ξ-grid lines
           for n = 1:Nq
             Dni, Dnj = s_D[n, i], s_D[n, j]
 
