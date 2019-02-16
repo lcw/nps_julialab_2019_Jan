@@ -526,7 +526,7 @@ function volumerhs_v3!(::Val{DEV},
       end
     end
 
-    for k in (1:Nq)
+    for k in 1:Nq
       @synchronize
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)
@@ -543,8 +543,6 @@ function volumerhs_v3!(::Val{DEV},
 
           P = gdm1*(E - (U^2 + V^2 + W^2)/(2*ρ) - ρ*gravity*z)
 
-          #          l_ρinv[i, j, k] = ρinv = 1 / ρ
-          # l_ρinv[i, j, k] 
           ρinv = 1 / ρ
 
           fluxρ_x = U
@@ -629,8 +627,7 @@ function volumerhs_v3!(::Val{DEV},
 
     @loop for j in (1:Nq; threadIdx().y)
       @loop for i in (1:Nq; threadIdx().x)
-
-        for k in (1:Nq)
+        for k in 1:Nq
           MJI = vgeo[i, j, k, _MJI, e]
 
           rhs[i, j, k, _U, e] += MJI*r_rhsU[k, i, j]
