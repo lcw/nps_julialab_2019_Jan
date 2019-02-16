@@ -489,32 +489,30 @@ function volumerhs_v3!(::Val{DEV},
                        nelem) where {DEV, N, nmoist, ntrace}
   @setup DEV
 
-  DFloat = eltype(Q)
-
   nvar = _nstate + nmoist + ntrace
 
   Nq = N + 1
 
-  s_D = @shmem DFloat (Nq, Nq)
-  s_F = @shmem DFloat (Nq, Nq, _nstate)
-  s_G = @shmem DFloat (Nq, Nq, _nstate)
-  s_H = @shmem DFloat (Nq, Nq, _nstate)
+  s_D = @shmem eltype(D) (Nq, Nq)
+  s_F = @shmem eltype(Q) (Nq, Nq, _nstate)
+  s_G = @shmem eltype(Q) (Nq, Nq, _nstate)
+  s_H = @shmem eltype(Q) (Nq, Nq, _nstate)
 
-  r_rhsρ = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsU = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsV = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsW = @scratch DFloat (Nq, Nq, Nq) 2
-  r_rhsE = @scratch DFloat (Nq, Nq, Nq) 2
+  r_rhsρ = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsU = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsV = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsW = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsE = @scratch eltype(rhs) (Nq, Nq, Nq) 2
 
   @inbounds @loop for e in (1:nelem; blockIdx().x)
     @loop for j in (1:Nq; threadIdx().y)
       @loop for i in (1:Nq; threadIdx().x)
         for k in (1:Nq)
-          r_rhsρ[k, i, j] = 0
-          r_rhsU[k, i, j] = 0
-          r_rhsV[k, i, j] = 0
-          r_rhsW[k, i, j] = 0
-          r_rhsE[k, i, j] = 0
+          r_rhsρ[k, i, j] = zero(eltype(rhs))
+          r_rhsU[k, i, j] = zero(eltype(rhs))
+          r_rhsV[k, i, j] = zero(eltype(rhs))
+          r_rhsW[k, i, j] = zero(eltype(rhs))
+          r_rhsE[k, i, j] = zero(eltype(rhs))
         end
 
         # fetch D into shared
