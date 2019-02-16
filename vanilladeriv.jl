@@ -657,6 +657,11 @@ function main(nelem, N, DFloat)
   Q = 1 .+ rand(rnd, DFloat, Nq, Nq, Nq, nvar, nelem)
   Q[:, :, :, _E, :] .+= 20
   vgeo = rand(rnd, DFloat, Nq, Nq, Nq, _nvgeo, nelem)
+
+  # Make sure the entries of the mass matrix satisfy the inverse relation
+  vgeo[:, :, :, _MJ, :] .+= 3
+  vgeo[:, :, :, _MJI, :] .= 1 ./ vgeo[:, :, :, _MJ, :]
+
   D = rand(rnd, DFloat, Nq, Nq)
 
   rhs_v1 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
