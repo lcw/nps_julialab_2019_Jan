@@ -498,11 +498,17 @@ function volumerhs_v3!(::Val{DEV},
   s_G = @shmem eltype(Q) (Nq, Nq, _nstate)
   s_H = @shmem eltype(Q) (Nq, Nq, _nstate)
 
-  r_rhsρ = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  r_rhsU = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  r_rhsV = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  r_rhsW = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  r_rhsE = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  #r_rhsρ = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  #r_rhsU = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  #r_rhsV = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  #r_rhsW = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  #r_rhsE = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+
+  r_rhsρ = @shmem eltype(rhs) (Nq, Nq, Nq)
+  r_rhsU = @shmem eltype(rhs) (Nq, Nq, Nq)
+  r_rhsV = @shmem eltype(rhs) (Nq, Nq, Nq)
+  r_rhsW = @shmem eltype(rhs) (Nq, Nq, Nq)
+  r_rhsE = @shmem eltype(rhs) (Nq, Nq, Nq)
 
   @inbounds @loop for e in (1:nelem; blockIdx().x)
     @loop for j in (1:Nq; threadIdx().y)
