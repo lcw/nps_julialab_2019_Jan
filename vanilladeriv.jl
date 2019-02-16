@@ -513,7 +513,7 @@ function volumerhs_v3!(::Val{DEV},
   @inbounds @loop for e in (1:nelem; blockIdx().x)
     @loop for j in (1:Nq; threadIdx().y)
       @loop for i in (1:Nq; threadIdx().x)
-        for k in (1:Nq)
+        for k in 1:Nq
           r_rhsρ[k, i, j] = zero(eltype(rhs))
           r_rhsU[k, i, j] = zero(eltype(rhs))
           r_rhsV[k, i, j] = zero(eltype(rhs))
