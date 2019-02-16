@@ -699,29 +699,27 @@ function volumerhs_v4!(::Val{DEV},
           ρinv = 1 / ρ
 
           flux[1, 1] = U
-          flux[1, 2] = ρinv * U * U + P
-          flux[1, 3] = ρinv * U * V
-          flux[1, 4] = ρinv * U * W
-          flux[1, 5] = ρinv * U * (E + P)
+          flux[1, 2] = ρinv*U*U + P
+          flux[1, 3] = ρinv*U*V
+          flux[1, 4] = ρinv*U*W
+          flux[1, 5] = ρinv*U*(E + P)
 
           flux[2, 1] = V
-          flux[2, 2] = ρinv * V * U
-          flux[2, 3] = ρinv * V * V + P
-          flux[2, 4] = ρinv * V * W
-          flux[2, 5] = ρinv * V * (E + P)
+          flux[2, 2] = ρinv*V*U
+          flux[2, 3] = ρinv*V*V + P
+          flux[2, 4] = ρinv*V*W
+          flux[2, 5] = ρinv*V*(E + P)
 
           flux[3, 1] = W
-          flux[3, 2] = ρinv * W * U
-          flux[3, 3] = ρinv * W * V
-          flux[3, 4] = ρinv * W * W + P
-          flux[3, 5] = ρinv * W * (E + P)
+          flux[3, 2] = ρinv*W*U
+          flux[3, 3] = ρinv*W*V
+          flux[3, 4] = ρinv*W*W + P
+          flux[3, 5] = ρinv*W*(E + P)
 
           for s = 1:_nstate
             s_F[i, j, 1, s] = MJ*(ξx*flux[1, s] + ξy*flux[2, s] + ξz*flux[3, s])
-
             s_F[i, j, 2, s] = MJ*(ηx*flux[1, s] + ηy*flux[2, s] + ηz*flux[3, s])
-
-            H[s] = MJ*(ζx*flux[1, s] + ζy*flux[2, s] + ζz*flux[3, s])
+                       H[s] = MJ*(ζx*flux[1, s] + ζy*flux[2, s] + ζz*flux[3, s])
           end
 
           for n = 1:Nq
