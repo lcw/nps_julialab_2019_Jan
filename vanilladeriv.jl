@@ -1,6 +1,7 @@
 using LinearAlgebra
 using Random
 using GPUifyLoops
+using StaticArrays
 
 const HAVE_CUDA = try
     using CUDAdrv
@@ -643,6 +644,132 @@ function volumerhs_v3!(::Val{DEV},
 end
 # }}}
 
+# {{{ volume_v4
+function volumerhs_v4!(::Val{DEV},
+                       ::Val{3},
+                       ::Val{N},
+                       ::Val{nmoist},
+                       ::Val{ntrace},
+                       rhs,
+                       Q,
+                       vgeo,
+                       gravity,
+                       D,
+                       nelem) where {DEV, N, nmoist, ntrace}
+  @setup DEV
+
+  nvar = _nstate + nmoist + ntrace
+  Nq = N + 1
+
+  s_D = @shmem eltype(D) (Nq, Nq)
+  s_F = @shmem eltype(Q) (Nq, Nq, 2, _nstate)
+
+  r_rhs = @scratch eltype(rhs) (_nstate, Nq, Nq, Nq) 2
+  # r_rhs = @shmem eltype(rhs) (_nstate, Nq, Nq, Nq)
+
+  flux = MArray{Tuple{3,_nstate},eltype(Q)}(undef)
+  H = MArray{Tuple{_nstate},eltype(Q)}(undef)
+
+  @inbounds @loop for e in (1:nelem; blockIdx().x)
+    @loop for j in (1:Nq; threadIdx().y)
+      @loop for i in (1:Nq; threadIdx().x)
+        for k in 1:Nq, s in 1:_nstate
+          r_rhs[s, k, i, j] = zero(eltype(rhs))
+        end
+
+        s_D[i, j] = D[i, j]
+      end
+    end
+
+    for k in 1:Nq
+      @synchronize
+      @loop for j in (1:Nq; threadIdx().y)
+        @loop for i in (1:Nq; threadIdx().x)
+          MJ = vgeo[i, j, k, _MJ, e]
+          ξx, ξy, ξz = vgeo[i,j,k,_ξx,e], vgeo[i,j,k,_ξy,e], vgeo[i,j,k,_ξz,e]
+          ηx, ηy, ηz = vgeo[i,j,k,_ηx,e], vgeo[i,j,k,_ηy,e], vgeo[i,j,k,_ηz,e]
+          ζx, ζy, ζz = vgeo[i,j,k,_ζx,e], vgeo[i,j,k,_ζy,e], vgeo[i,j,k,_ζz,e]
+          z = vgeo[i,j,k,_z,e]
+
+          U, V, W = Q[i, j, k, _U, e], Q[i, j, k, _V, e], Q[i, j, k, _W, e]
+          ρ, E = Q[i, j, k, _ρ, e], Q[i, j, k, _E, e]
+
+          P = gdm1*(E - (U^2 + V^2 + W^2)/(2*ρ) - ρ*gravity*z)
+
+          ρinv = 1 / ρ
+
+          flux[1, 1] = U
+          flux[1, 2] = ρinv * U * U + P
+          flux[1, 3] = ρinv * U * V
+          flux[1, 4] = ρinv * U * W
+          flux[1, 5] = ρinv * U * (E + P)
+
+          flux[2, 1] = V
+          flux[2, 2] = ρinv * V * U
+          flux[2, 3] = ρinv * V * V + P
+          flux[2, 4] = ρinv * V * W
+          flux[2, 5] = ρinv * V * (E + P)
+
+          flux[3, 1] = W
+          flux[3, 2] = ρinv * W * U
+          flux[3, 3] = ρinv * W * V
+          flux[3, 4] = ρinv * W * W + P
+          flux[3, 5] = ρinv * W * (E + P)
+
+          for s = 1:_nstate
+            s_F[i, j, 1, s] = MJ*(ξx*flux[1, s] + ξy*flux[2, s] + ξz*flux[3, s])
+
+            s_F[i, j, 2, s] = MJ*(ηx*flux[1, s] + ηy*flux[2, s] + ηz*flux[3, s])
+
+            H[s] = MJ*(ζx*flux[1, s] + ζy*flux[2, s] + ζz*flux[3, s])
+          end
+
+          for n = 1:Nq
+            Dkn = s_D[k, n]
+
+            for s = 1:_nstate
+              r_rhs[s, n, i, j] += Dkn * H[s]
+            end
+          end
+
+          r_rhs[4, k, i, j] -= MJ * ρ * gravity
+        end
+      end
+
+      @synchronize
+
+      @loop for j in (1:Nq; threadIdx().y)
+        @loop for i in (1:Nq; threadIdx().x)
+
+          # loop of ξ-grid lines
+          for n = 1:Nq
+            Dni, Dnj = s_D[n, i], s_D[n, j]
+
+            for s = 1:_nstate
+              r_rhs[s,k,i,j] += Dni * s_F[n, j, 1, s] + Dnj * s_F[i, n, 2, s]
+            end
+          end
+        end
+      end
+    end
+
+    @loop for j in (1:Nq; threadIdx().y)
+      @loop for i in (1:Nq; threadIdx().x)
+        for k in 1:Nq
+          MJI = vgeo[i, j, k, _MJI, e]
+
+          for s in 1:_nstate
+            rhs[i, j, k, s, e] += MJI * r_rhs[s, k, i, j]
+          end
+        end
+      end
+    end
+
+  end
+  nothing
+end
+# }}}
+
 
 
 function main(nelem, N, DFloat)
@@ -682,6 +809,22 @@ function main(nelem, N, DFloat)
                 vgeo, DFloat(grav), D, nelem)
   @show norm_v3 = norm(rhs_v3)
   @show (norm_v1 - norm_v3) / norm_v1
+
+  rhs_v4 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+  volumerhs_v4!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v4, Q,
+                vgeo, DFloat(grav), D, nelem)
+  @show norm_v4 = norm(rhs_v4)
+  @show (norm_v1 - norm_v4) / norm_v1
+
+  @time volumerhs_v2!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
+                      vgeo, DFloat(grav), D, nelem)
+
+  @time volumerhs_v3!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
+                      vgeo, DFloat(grav), D, nelem)
+
+  @time volumerhs_v4!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v4, Q,
+                      vgeo, DFloat(grav), D, nelem)
+
 
   if HAVE_CUDA
     rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
