@@ -596,9 +596,6 @@ function volumerhs_v3!(::Val{DEV},
 
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)
-          # buoyancy term
-          ρ = Q[i, j, k, _ρ, e]
-          r_rhsW[i,j,k] -= ρ * gravity
 
           # loop of ξ-grid lines
           for n = 1:Nq
@@ -629,10 +626,11 @@ function volumerhs_v3!(::Val{DEV},
 
         for k in (1:Nq)
           MJI = vgeo[i, j, k, _MJI, e]
+          ρ = Q[i, j, k, _ρ, e]
 
           rhs[i, j, k, _U, e] += MJI*r_rhsU[k, i, j]
           rhs[i, j, k, _V, e] += MJI*r_rhsV[k, i, j]
-          rhs[i, j, k, _W, e] += MJI*r_rhsW[k, i, j]
+          rhs[i, j, k, _W, e] += MJI*r_rhsW[k, i, j] - ρ * gravity
           rhs[i, j, k, _ρ, e] += MJI*r_rhsρ[k, i, j]
           rhs[i, j, k, _E, e] += MJI*r_rhsE[k, i, j]
         end
