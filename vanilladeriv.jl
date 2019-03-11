@@ -230,7 +230,7 @@ end
 # }}}
 
 # {{{ Volume RHS for 3-D
-function volumerhs_v2!(::Val{DEV}, ::Val{3}, ::Val{N}, ::Val{nmoist},
+function volumerhs_v2!(::DEV, ::Val{3}, ::Val{N}, ::Val{nmoist},
                        ::Val{ntrace}, rhs, Q, vgeo, gravity, D,
                        nelem) where {DEV, N, nmoist, ntrace}
     @setup DEV
@@ -477,7 +477,7 @@ end
 # }}}
 
 # {{{ volume_v3
-function volumerhs_v3!(::Val{DEV},
+function volumerhs_v3!(::DEV,
                        ::Val{3},
                        ::Val{N},
                        ::Val{nmoist},
@@ -499,17 +499,11 @@ function volumerhs_v3!(::Val{DEV},
   s_G = @shmem eltype(Q) (Nq, Nq, _nstate)
   s_H = @shmem eltype(Q) (Nq, Nq, _nstate)
 
-  #r_rhsρ = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  #r_rhsU = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  #r_rhsV = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  #r_rhsW = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-  #r_rhsE = @scratch eltype(rhs) (Nq, Nq, Nq) 2
-
-  r_rhsρ = @shmem eltype(rhs) (Nq, Nq, Nq)
-  r_rhsU = @shmem eltype(rhs) (Nq, Nq, Nq)
-  r_rhsV = @shmem eltype(rhs) (Nq, Nq, Nq)
-  r_rhsW = @shmem eltype(rhs) (Nq, Nq, Nq)
-  r_rhsE = @shmem eltype(rhs) (Nq, Nq, Nq)
+  r_rhsρ = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsU = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsV = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsW = @scratch eltype(rhs) (Nq, Nq, Nq) 2
+  r_rhsE = @scratch eltype(rhs) (Nq, Nq, Nq) 2
 
   @inbounds @loop for e in (1:nelem; blockIdx().x)
     @loop for j in (1:Nq; threadIdx().y)
@@ -645,7 +639,7 @@ end
 # }}}
 
 # {{{ volume_v4
-function volumerhs_v4!(::Val{DEV},
+function volumerhs_v4!(::DEV,
                        ::Val{3},
                        ::Val{N},
                        ::Val{nmoist},
@@ -795,30 +789,30 @@ function main(nelem, N, DFloat)
   vgeo = reshape(vgeo, Nq, Nq, Nq, _nvgeo, nelem)
 
   rhs_v2 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-  volumerhs_v2!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
+  volumerhs_v2!(CPU(), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
                 vgeo, DFloat(grav), D, nelem)
   @show norm_v2 = norm(rhs_v2)
   @show norm_v1 - norm_v2
 
   rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-  volumerhs_v3!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
+  volumerhs_v3!(CPU(), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
                 vgeo, DFloat(grav), D, nelem)
   @show norm_v3 = norm(rhs_v3)
   @show (norm_v1 - norm_v3) / norm_v1
 
   rhs_v4 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-  volumerhs_v4!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v4, Q,
+  volumerhs_v4!(CPU(), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v4, Q,
                 vgeo, DFloat(grav), D, nelem)
   @show norm_v4 = norm(rhs_v4)
   @show (norm_v1 - norm_v4) / norm_v1
 
-  @time volumerhs_v2!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
+  @time volumerhs_v2!(CPU(), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v2, Q,
                       vgeo, DFloat(grav), D, nelem)
 
-  @time volumerhs_v3!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
+  @time volumerhs_v3!(CPU(), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v3, Q,
                       vgeo, DFloat(grav), D, nelem)
 
-  @time volumerhs_v4!(Val(:CPU), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v4, Q,
+  @time volumerhs_v4!(CPU(), Val(3), Val(N), Val(nmoist), Val(ntrace), rhs_v4, Q,
                       vgeo, DFloat(grav), D, nelem)
 
 
@@ -830,11 +824,20 @@ function main(nelem, N, DFloat)
     d_rhs_v3 = CuArray(rhs_v3)
 
     @cuda(threads=(N+1, N+1), blocks=nelem,
-          volumerhs_v3!(Val(:GPU), Val(3), Val(N), Val(nmoist), Val(ntrace),
+          volumerhs_v3!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
                         d_rhs_v3, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
     rhs_v3 .= d_rhs_v3
     @show norm_v3 = norm(rhs_v3)
     @show norm_v1 - norm_v3
+
+    d_rhs_v4 = CuArray(rhs_v4)
+
+    @cuda(threads=(N+1, N+1), blocks=nelem,
+          volumerhs_v4!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
+                        d_rhs_v4, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+    rhs_v4 .= d_rhs_v4
+    @show norm_v4 = norm(rhs_v4)
+    @show norm_v1 - norm_v4
   end
 
   nothing
