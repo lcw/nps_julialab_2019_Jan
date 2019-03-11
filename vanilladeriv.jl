@@ -830,6 +830,7 @@ function main(nelem, N, DFloat)
     @show norm_v3 = norm(rhs_v3)
     @show norm_v1 - norm_v3
 
+    rhs_v4 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_rhs_v4 = CuArray(rhs_v4)
 
     @cuda(threads=(N+1, N+1), blocks=nelem,
