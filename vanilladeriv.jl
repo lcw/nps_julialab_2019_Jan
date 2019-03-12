@@ -817,13 +817,24 @@ function main(nelem, N, DFloat)
 
 
   if HAVE_CUDA
-    rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_Q = CuArray(Q)
     d_D = CuArray(D)
     d_vgeo = CuArray(vgeo)
+
+    rhs_v2 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+    d_rhs_v2 = CuArray(rhs_v2)
+
+    @cuda(threads=(N+1, N+1, N+1), blocks=nelem,
+          volumerhs_v2!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
+                        d_rhs_v2, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+    rhs_v2 .= d_rhs_v2
+    @show norm_v2 = norm(rhs_v2)
+    @show norm_v1 - norm_v2
+
+    rhs_v3 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_rhs_v3 = CuArray(rhs_v3)
 
-    @cuda(threads=(N+1, N+1), blocks=nelem,
+    @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
           volumerhs_v3!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
                         d_rhs_v3, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
     rhs_v3 .= d_rhs_v3
@@ -833,7 +844,7 @@ function main(nelem, N, DFloat)
     rhs_v4 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_rhs_v4 = CuArray(rhs_v4)
 
-    @cuda(threads=(N+1, N+1), blocks=nelem,
+    @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
           volumerhs_v4!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
                         d_rhs_v4, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
     rhs_v4 .= d_rhs_v4
