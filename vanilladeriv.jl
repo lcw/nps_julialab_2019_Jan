@@ -521,7 +521,7 @@ function volumerhs_v3!(::DEV,
       end
     end
 
-    for k in 1:Nq
+    @unroll for k in 1:Nq
       @synchronize
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)
@@ -675,7 +675,7 @@ function volumerhs_v4!(::DEV,
       end
     end
 
-    for k in 1:Nq
+    @unroll for k in 1:Nq
       @synchronize
       @loop for j in (1:Nq; threadIdx().y)
         @loop for i in (1:Nq; threadIdx().x)

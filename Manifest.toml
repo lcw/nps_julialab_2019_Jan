@@ -137,7 +137,7 @@ version = "0.6.1"
 
 [[GPUifyLoops]]
 deps = ["Cassette", "Requires", "StaticArrays"]
-git-tree-sha1 = "7976e4cff5f546f49244e969a28deded53a576d0"
+git-tree-sha1 = "6a0a74eaf08a71659a90d75f45f0dc6fc945efda"
 repo-rev = "master"
 repo-url = "https://github.com/vchuravy/GPUifyLoops.jl.git"
 uuid = "ba82f77b-6841-5d2e-bd9f-4daf811aec27"
