@@ -849,6 +849,10 @@ function main(nelem, N, DFloat)
           volumerhs_v3!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
                         d_rhs_v3, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
 
+    # @device_code dir="temp" @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
+    #       volumerhs_v3!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
+    #                     d_rhs_v3, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+
     rhs_v4 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_rhs_v4 = CuArray(rhs_v4)
 
