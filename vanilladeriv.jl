@@ -1014,14 +1014,14 @@ function main(nelem, N, DFloat)
     rhs_v5 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
     d_rhs_v5 = CuArray(rhs_v5)
 
-    @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
+    @cuda(threads=(N+1, N+1), blocks=nelem,
           volumerhs_v5!(Val(3), Val(N), Val(nmoist), Val(ntrace),
                         d_rhs_v5, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
     rhs_v5 .= d_rhs_v5
     @show norm_v5 = norm(rhs_v5)
     @show norm_v1 - norm_v5
 
-    @show CUDAdrv.@elapsed @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
+    @show CUDAdrv.@elapsed @cuda(threads=(N+1, N+1), blocks=nelem,
           volumerhs_v5!(Val(3), Val(N), Val(nmoist), Val(ntrace), d_rhs_v5,
                         d_Q, d_vgeo, DFloat(grav), d_D, nelem))
   end
