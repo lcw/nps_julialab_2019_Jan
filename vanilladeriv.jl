@@ -867,7 +867,7 @@ function volumerhs_v5!(::Val{3},
       r_rhsE[n] += Dkn * r_HE
     end
 
-    r_rhsW[k,i,j] -= MJ * ρ * gravity
+    r_rhsW[k] -= MJ * ρ * gravity
 
     sync_threads()
     # loop of ξ-grid lines
