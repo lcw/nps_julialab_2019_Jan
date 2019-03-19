@@ -35,7 +35,7 @@ version = "0.6.1"
 
 [[CUDAdrv]]
 deps = ["CUDAapi", "Libdl", "Printf"]
-git-tree-sha1 = "e4cac4449080a4e70060d32a308d0ce5bee4e55a"
+git-tree-sha1 = "3014fc9bab66af6646e476f86ff1f86f019fb869"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/CUDAdrv.jl.git"
 uuid = "c5f51814-7f29-56b8-a69c-e4d8f6be1fde"
@@ -43,7 +43,7 @@ version = "1.0.1+"
 
 [[CUDAnative]]
 deps = ["Adapt", "CUDAapi", "CUDAdrv", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Pkg", "Printf"]
-git-tree-sha1 = "1a51546be16769f007428e871681fe455e54b9cb"
+git-tree-sha1 = "5cbf7cc4350d14a098ac320989e338376b71e020"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/CUDAnative.jl.git"
 uuid = "be33ccc6-a3ff-5ff2-a52e-74243cff1e17"
@@ -75,13 +75,13 @@ version = "1.2.0"
 
 [[Crayons]]
 deps = ["Test"]
-git-tree-sha1 = "dbc137e2da40ccb8a3ac6193a8597fac66c9069e"
+git-tree-sha1 = "416737eea5c50ee5a08c588ea73d77d5eebc94e7"
 uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
-version = "2.0.0"
+version = "3.0.0"
 
 [[CuArrays]]
 deps = ["AbstractFFTs", "Adapt", "CUDAapi", "CUDAdrv", "CUDAnative", "DiffRules", "ForwardDiff", "GPUArrays", "LinearAlgebra", "MacroTools", "NNlib", "Printf", "Random", "SparseArrays", "TimerOutputs"]
-git-tree-sha1 = "4cf1b59d7e79aa81da1f44ebf4d513415a4ab6d4"
+git-tree-sha1 = "eedd532df046e185db3da77465d93aa191c4f571"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaGPU/CuArrays.jl.git"
 uuid = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
@@ -119,9 +119,9 @@ version = "0.2.4"
 
 [[FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Test"]
-git-tree-sha1 = "471b7e33dc9c9c5b9170045dd57c8ba0927b2918"
+git-tree-sha1 = "2def0123a4f3572234405b0e3d80bfe5d3e1a2a4"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "0.4.0"
+version = "0.5.0"
 
 [[ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "InteractiveUtils", "LinearAlgebra", "NaNMath", "Random", "SparseArrays", "SpecialFunctions", "StaticArrays", "Test"]
@@ -137,7 +137,7 @@ version = "0.6.1"
 
 [[GPUifyLoops]]
 deps = ["Cassette", "Requires", "StaticArrays"]
-git-tree-sha1 = "6a0a74eaf08a71659a90d75f45f0dc6fc945efda"
+git-tree-sha1 = "ada4cfcc64533132034795c3861e4c3a3e260085"
 repo-rev = "master"
 repo-url = "https://github.com/vchuravy/GPUifyLoops.jl.git"
 uuid = "ba82f77b-6841-5d2e-bd9f-4daf811aec27"
