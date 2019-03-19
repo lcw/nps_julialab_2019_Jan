@@ -1012,20 +1012,19 @@ function main(nelem, N, DFloat)
           volumerhs_v4!(CUDA(), Val(3), Val(N), Val(nmoist), Val(ntrace),
                         d_rhs_v4, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
 
-    # # The compliation of the following kernel is currently broken
-    # rhs_v5 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
-    # d_rhs_v5 = CuArray(rhs_v5)
+    rhs_v5 = zeros(DFloat, Nq, Nq, Nq, nvar, nelem)
+    d_rhs_v5 = CuArray(rhs_v5)
 
-    # @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
-    #       volumerhs_v5!(Val(3), Val(N), Val(nmoist), Val(ntrace),
-    #                     d_rhs_v5, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
-    # rhs_v5 .= d_rhs_v5
-    # @show norm_v5 = norm(rhs_v5)
-    # @show norm_v1 - norm_v5
+    @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
+          volumerhs_v5!(Val(3), Val(N), Val(nmoist), Val(ntrace),
+                        d_rhs_v5, d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+    rhs_v5 .= d_rhs_v5
+    @show norm_v5 = norm(rhs_v5)
+    @show norm_v1 - norm_v5
 
-    # @show CUDAdrv.@elapsed @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
-    #       volumerhs_v5!(Val(3), Val(N), Val(nmoist), Val(ntrace), d_rhs_v5,
-    #                     d_Q, d_vgeo, DFloat(grav), d_D, nelem))
+    @show CUDAdrv.@elapsed @cuda(threads=(N+1, N+1), blocks=nelem, maxregs=255,
+          volumerhs_v5!(Val(3), Val(N), Val(nmoist), Val(ntrace), d_rhs_v5,
+                        d_Q, d_vgeo, DFloat(grav), d_D, nelem))
   end
 
   nothing
