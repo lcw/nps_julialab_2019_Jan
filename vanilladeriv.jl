@@ -779,7 +779,6 @@ function volumerhs_v5!(::Val{3},
   s_D = @cuStaticSharedMem eltype(D) (Nq, Nq)
   s_F = @cuStaticSharedMem eltype(Q) (Nq, Nq, _nstate)
   s_G = @cuStaticSharedMem eltype(Q) (Nq, Nq, _nstate)
-  s_H = @cuStaticSharedMem eltype(Q) (Nq, Nq, _nstate)
 
   r_rhsρ = MArray{Tuple{Nq},eltype(rhs)}(undef)
   r_rhsU = MArray{Tuple{Nq},eltype(rhs)}(undef)
