@@ -791,7 +791,10 @@ function volumerhs_v5!(::Val{3},
   i = threadIdx().x
 
   @inbounds begin
-  for k in 1:Nq
+  # fetch D into shared
+  s_D[i, j] = D[i, j]
+
+  @unroll for k in 1:Nq
     r_rhsρ[k] = zero(eltype(rhs))
     r_rhsU[k] = zero(eltype(rhs))
     r_rhsV[k] = zero(eltype(rhs))
@@ -799,10 +802,7 @@ function volumerhs_v5!(::Val{3},
     r_rhsE[k] = zero(eltype(rhs))
   end
 
-  # fetch D into shared
-  s_D[i, j] = D[i, j]
-
-  for k in 1:Nq
+  @unroll for k in 1:Nq
     sync_threads()
 
     # Load values will need into registers
@@ -856,7 +856,7 @@ function volumerhs_v5!(::Val{3},
     r_HE = MJ * (ζx * fluxE_x + ζy * fluxE_y + ζz * fluxE_z)
 
     # one shared access per 10 flops
-    for n = 1:Nq
+    @unroll for n = 1:Nq
       Dkn = s_D[k, n]
 
       r_rhsρ[n] += Dkn * r_Hρ
@@ -870,7 +870,7 @@ function volumerhs_v5!(::Val{3},
 
     sync_threads()
     # loop of ξ-grid lines
-    for n = 1:Nq
+    @unroll for n = 1:Nq
       Dni = s_D[n, i]
       Dnj = s_D[n, j]
 
@@ -891,7 +891,7 @@ function volumerhs_v5!(::Val{3},
     end
   end # k
 
-  for k in 1:Nq
+  @unroll for k in 1:Nq
     MJI = vgeo[i, j, k, _MJI, e]
 
     rhs[i, j, k, _U, e] += MJI*r_rhsU[k]
